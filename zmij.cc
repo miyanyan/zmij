@@ -222,10 +222,10 @@ ZMIJ_INLINE auto select(uint64_t condition, int64_t true_value,
 using zmij::detail::compute_dec_exp;
 using zmij::detail::compute_exp_shift;
 using zmij::detail::float_traits;
-using zmij::detail::umul128;
-using zmij::detail::umul192_hi128;
 using zmij::detail::uint128;
 using zmij::detail::uint128_t;
+using zmij::detail::umul128;
+using zmij::detail::umul192_hi128;
 
 #if ZMIJ_USE_INT128 && defined(__APPLE__)
 constexpr bool use_umul128_hi64 = true;  // Use umul128_hi64 for division.
@@ -552,9 +552,8 @@ struct float_shuffle_table {
     float_shuffle_table t;
     for (int idx = 0; idx < num_variants && enable; ++idx) {
       int sig_index = idx >> 1;
-      sig_shuffle s = make_sig_shuffle(sig_index + 1,
-                                       sig_index == num_bcd_digits,
-                                       (idx & 1) != 0);
+      sig_shuffle s = make_sig_shuffle(
+          sig_index + 1, sig_index == num_bcd_digits, (idx & 1) != 0);
       for (int slot = 0; slot < num_slots; ++slot) {
         unsigned char* out = &t.data[(slot * num_variants + idx) * 16];
         // Shuffle high bit: output 0.
@@ -1391,9 +1390,8 @@ ZMIJ_INLINE auto to_decimal(uint64_t bin_sig, int bin_exp,
     dec_sig = scaled.integral / 10;
     uint64_t last_digit = scaled.integral - dec_sig * 10;
     bool has_fraction = (scaled.fraction | scaled.fraction_tail) != 0;
-    bool round_up =
-        5 < last_digit ||
-        (last_digit == 5 && (has_fraction || (dec_sig & 1) != 0));
+    bool round_up = 5 < last_digit ||
+                    (last_digit == 5 && (has_fraction || (dec_sig & 1) != 0));
     dec_sig += round_up;
     ++dec_exp;
   }
@@ -1659,8 +1657,7 @@ namespace zmij {
 
 namespace detail {
 
-template <typename Float>
-auto to_decimal(Float value) noexcept -> dec_fp<> {
+template <typename Float> auto to_decimal(Float value) noexcept -> dec_fp<> {
   using traits = float_traits<Float>;
   auto bits = traits::to_bits(value);
   auto bin_exp = traits::get_exp(bits);  // binary exponent
@@ -2092,9 +2089,8 @@ auto write_fixed(char* buffer, Float value, int precision) noexcept -> char* {
     dec_sig = integral / pow;
     uint64_t remainder = integral - dec_sig * pow;
     uint64_t half = pow / 2;
-    bool round_up =
-        half < remainder ||
-        (half == remainder && (has_fraction || (dec_sig & 1) != 0));
+    bool round_up = half < remainder ||
+                    (half == remainder && (has_fraction || (dec_sig & 1) != 0));
     dec_sig += round_up;
   } else {
     dec_sig = round_even(scaled);
@@ -2142,8 +2138,10 @@ auto write_hex(char* buffer, Float value, bool prefix) noexcept -> char* {
   if (!traits::is_normal(bin_exp)) [[ZMIJ_UNLIKELY]] {
     if (bin_exp != 0) return write_inf_nan(buffer, bin_sig != 0);
     zero = bin_sig == 0;
-    if (zero) bin_exp = traits::exp_bias;  // This cancels to 0 below.
-    else normalize<Float>(bin_sig, bin_exp);
+    if (zero)
+      bin_exp = traits::exp_bias;  // This cancels to 0 below.
+    else
+      normalize<Float>(bin_sig, bin_exp);
   }
   bin_exp -= traits::exp_bias;
 
@@ -2178,8 +2176,10 @@ auto write_hex(char* out, size_t n, Float value, int precision,
   if (!traits::is_normal(bin_exp)) [[ZMIJ_UNLIKELY]] {
     if (bin_exp != 0) return w.write(bin_sig != 0 ? "nan" : "inf", 3);
     zero = bin_sig == 0;
-    if (zero) bin_exp = traits::exp_bias;  // This cancels to 0 below.
-    else normalize<Float>(bin_sig, bin_exp);
+    if (zero)
+      bin_exp = traits::exp_bias;  // This cancels to 0 below.
+    else
+      normalize<Float>(bin_sig, bin_exp);
   }
   bin_exp -= traits::exp_bias;
 

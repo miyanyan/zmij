@@ -24,8 +24,8 @@ void* malloc(size_t n) { return fail_malloc ? nullptr : ::malloc(n); }
 // functions.
 #include "zmij.cc"
 
-// A copyable, inline-storage bigint for tests. bigint holds a raw limbs pointer,
-// so the copy re-points at this object's own storage.
+// A copyable, inline-storage bigint for tests. bigint holds a raw limbs
+// pointer, so the copy re-points at this object's own storage.
 struct fixed_bigint : bigint {
   // Holds the widest pow10_compute value: 10**max_exp times a result_bits
   // number.

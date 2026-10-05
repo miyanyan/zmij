@@ -377,8 +377,7 @@ inline ZMIJ_CONSTEXPR auto compute_pow10(int exp) noexcept -> uint128 {
 // 10^dec_exp puts the decimal point in different bit positions:
 //   3 * 2**59 / 100 = 1.72...e+16  (needs shift = 1 + 1)
 //   3 * 2**60 / 100 = 3.45...e+16  (needs shift = 2 + 1)
-inline ZMIJ_CONSTEXPR auto compute_exp_shift(int bin_exp,
-                                             int dec_exp) noexcept
+inline ZMIJ_CONSTEXPR auto compute_exp_shift(int bin_exp, int dec_exp) noexcept
     -> signed char {
   assert(dec_exp >= -350 && dec_exp <= 350);
   // log2_pow10_sig = round(log2(10) * 2**log2_pow10_exp) + 1
@@ -391,8 +390,8 @@ inline ZMIJ_CONSTEXPR auto compute_exp_shift(int bin_exp,
 
 // Converts the nonzero finite binary value bin_sig * 2**bin_exp using yy.
 template <typename Float>
-inline ZMIJ_CONSTEXPR20 auto to_decimal(uint64_t bin_sig,
-                                        int bin_exp) noexcept -> dec_fp<> {
+inline ZMIJ_CONSTEXPR20 auto to_decimal(uint64_t bin_sig, int bin_exp) noexcept
+    -> dec_fp<> {
   assert(bin_sig != 0);
   constexpr uint64_t implicit_bit = float_traits<Float>::implicit_bit;
   bool irregular = bin_sig == implicit_bit;
@@ -618,11 +617,10 @@ inline auto clamp_end(char* out, size_t size, size_t n) noexcept -> char* {
 // Copies the result in [`buffer`, `end`) to `out`, truncating after `n` chars,
 // and returns the past-the-end pointer.
 inline ZMIJ_CONSTEXPR20 auto copy_clamped(char* out, size_t n,
-                                         const char* buffer,
-                                         const char* end) noexcept -> char* {
+                                          const char* buffer,
+                                          const char* end) noexcept -> char* {
   size_t size = size_t(end - buffer);
-  if (is_constant_evaluated())
-    return copy_n(out, buffer, size < n ? size : n);
+  if (is_constant_evaluated()) return copy_n(out, buffer, size < n ? size : n);
   memcpy(out, buffer, size < n ? size : n);
   return clamp_end(out, size, n);
 }
@@ -685,8 +683,8 @@ inline ZMIJ_CONSTEXPR20 auto write(char* out, size_t n, double value) noexcept
     -> char* {
   if (detail::is_constant_evaluated()) {
     char buffer[double_buffer_size] = {};
-    return detail::copy_clamped(
-        out, n, buffer, detail::write_constexpr(buffer, value));
+    return detail::copy_clamped(out, n, buffer,
+                                detail::write_constexpr(buffer, value));
   }
   char buffer[double_buffer_size];
   if (n >= sizeof(buffer)) return detail::write(out, value);
@@ -697,8 +695,8 @@ inline ZMIJ_CONSTEXPR20 auto write(char* out, size_t n, float value) noexcept
     -> char* {
   if (detail::is_constant_evaluated()) {
     char buffer[float_buffer_size] = {};
-    return detail::copy_clamped(
-        out, n, buffer, detail::write_constexpr(buffer, value));
+    return detail::copy_clamped(out, n, buffer,
+                                detail::write_constexpr(buffer, value));
   }
   char buffer[float_buffer_size];
   if (n >= sizeof(buffer)) return detail::write(out, value);

@@ -499,7 +499,8 @@ TEST(double_test, to_chars_format) {
   EXPECT_EQ(fmt(zmij::chars_format::fixed, 0, 0.5), "0");
   EXPECT_EQ(fmt(zmij::chars_format::fixed, 0, std::nextafter(0.5, 1.0)), "1");
   EXPECT_EQ(fmt(zmij::chars_format::fixed, 1, 1.25), "1.2");
-  EXPECT_EQ(fmt(zmij::chars_format::fixed, 1, std::nextafter(1.25, 2.0)), "1.3");
+  EXPECT_EQ(fmt(zmij::chars_format::fixed, 1, std::nextafter(1.25, 2.0)),
+            "1.3");
   EXPECT_EQ(fmt(zmij::chars_format::scientific, 4, 1234.5678), "1.2346e+03");
   EXPECT_EQ(fmt(zmij::chars_format::scientific, 0, 2.5), "2e+00");
   EXPECT_EQ(fmt(zmij::chars_format::general, 6, 1234.5678), "1234.57");
@@ -517,9 +518,9 @@ TEST(double_test, to_chars_format) {
   EXPECT_EQ(fmt(zmij::chars_format::hex, 0, -2.0), "-1p+1");
   EXPECT_EQ(fmt(zmij::chars_format::hex, 6, 0.0), "0.000000p+0");
   EXPECT_EQ(fmt(zmij::chars_format::hex, -1, 1.5), "1.8p+0");  // shortest
-  EXPECT_EQ(fmt(zmij::chars_format::hex, 6,
-                std::numeric_limits<double>::infinity()),
-            "inf");
+  EXPECT_EQ(
+      fmt(zmij::chars_format::hex, 6, std::numeric_limits<double>::infinity()),
+      "inf");
   EXPECT_EQ(fmt(zmij::chars_format::hex, 6,
                 -std::numeric_limits<double>::quiet_NaN()),
             "-nan");
@@ -957,9 +958,12 @@ TEST(long_double_test, to_chars_format) {
         << conv << " precision=" << precision << " value=" << double(value);
   };
   long double values[] = {
-      1.5L, 0.0L, 1234.5678L, 1e300L,
+      1.5L,
+      0.0L,
+      1234.5678L,
+      1e300L,
       3.14159265358979323846264338327950288L,  // beyond double precision
-      1.0L + 0x1p-60L,                          // differs from 1.0 if extended
+      1.0L + 0x1p-60L,                         // differs from 1.0 if extended
   };
   for (long double value : values) {
     for (int precision : {0, 6, 20, 40}) {
