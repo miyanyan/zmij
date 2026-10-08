@@ -49,6 +49,129 @@
 #  define ZMIJ_DEFAULT(...)
 #endif
 
+#ifdef __x86_64__
+#  define ZMIJ_X86_64 1
+#else
+#  define ZMIJ_X86_64 0
+#endif
+
+#ifdef _MSC_VER
+#  define ZMIJ_MSC_VER _MSC_VER
+#else
+#  define ZMIJ_MSC_VER 0
+#endif
+
+#if defined(__has_builtin) && !defined(ZMIJ_NO_BUILTINS)
+#  define ZMIJ_HAS_BUILTIN(x) __has_builtin(x)
+#else
+#  define ZMIJ_HAS_BUILTIN(x) 0
+#endif
+#ifdef __has_attribute
+#  define ZMIJ_HAS_ATTRIBUTE(x) __has_attribute(x)
+#else
+#  define ZMIJ_HAS_ATTRIBUTE(x) 0
+#endif
+#ifdef __has_cpp_attribute
+#  define ZMIJ_HAS_CPP_ATTRIBUTE(x) __has_cpp_attribute(x)
+#else
+#  define ZMIJ_HAS_CPP_ATTRIBUTE(x) 0
+#endif
+
+#if ZMIJ_HAS_CPP_ATTRIBUTE(likely) && ZMIJ_HAS_CPP_ATTRIBUTE(unlikely)
+#  define ZMIJ_LIKELY likely
+#  define ZMIJ_UNLIKELY unlikely
+#else
+#  define ZMIJ_LIKELY
+#  define ZMIJ_UNLIKELY
+#endif
+
+#if ZMIJ_HAS_CPP_ATTRIBUTE(maybe_unused)
+#  define ZMIJ_MAYBE_UNUSED maybe_unused
+#else
+#  define ZMIJ_MAYBE_UNUSED
+#endif
+
+#ifdef __GNUC__
+#  define ZMIJ_ASM(x) asm x
+#else
+#  define ZMIJ_ASM(x)
+#endif
+
+// The following macros configure how zmij is built.  They don't affect the
+// public interfaces.
+
+#ifndef ZMIJ_USE_SIMD
+#  define ZMIJ_USE_SIMD 1
+#endif
+
+#ifdef ZMIJ_USE_NEON
+// Use the provided definition.
+#elif defined(__ARM_NEON) || defined(_M_ARM64)
+#  define ZMIJ_USE_NEON ZMIJ_USE_SIMD
+#else
+#  define ZMIJ_USE_NEON 0
+#endif
+
+#ifdef ZMIJ_USE_SSE
+// Use the provided definition.
+#elif defined(__SSE2__)
+#  define ZMIJ_USE_SSE ZMIJ_USE_SIMD
+#elif defined(_M_AMD64) || (defined(_M_IX86_FP) && _M_IX86_FP == 2)
+#  define ZMIJ_USE_SSE ZMIJ_USE_SIMD
+#else
+#  define ZMIJ_USE_SSE 0
+#endif
+
+#ifdef ZMIJ_USE_SSE4_1
+// Use the provided definition.
+static_assert(!ZMIJ_USE_SSE4_1 || ZMIJ_USE_SSE, "SSE4.1 requires SSE");
+#elif defined(__SSE4_1__) || defined(__AVX__)
+// On MSVC there's no way to check for SSE4.1 specifically so check __AVX__.
+#  define ZMIJ_USE_SSE4_1 ZMIJ_USE_SSE
+#else
+#  define ZMIJ_USE_SSE4_1 0
+#endif
+
+// 256-bit paths for the u128 body chunks.
+#ifdef ZMIJ_USE_AVX2
+// Use the provided definition.
+static_assert(!ZMIJ_USE_AVX2 || ZMIJ_USE_SSE4_1, "AVX2 requires SSE4.1");
+#elif defined(__AVX2__)
+#  define ZMIJ_USE_AVX2 ZMIJ_USE_SSE4_1
+#else
+#  define ZMIJ_USE_AVX2 0
+#endif
+
+// Fused multiply-add, for the float-reciprocal digit kernels.  This is
+// a microarchtiecture level 3 feature, and usually comes paired with AVX2.
+// MSVC has no __FMA__, but /arch:AVX2 implies FMA there; clang-cl defines
+// __FMA__ when FMA is on, so it takes the first branch.
+#ifdef ZMIJ_USE_FMA
+// Use the provided definition.
+static_assert(!ZMIJ_USE_FMA || ZMIJ_USE_SSE4_1, "FMA requires SSE4.1");
+#elif defined(__FMA__) || \
+    (defined(_MSC_VER) && !defined(__clang__) && defined(__AVX2__))
+#  define ZMIJ_USE_FMA ZMIJ_USE_SSE4_1
+#else
+#  define ZMIJ_USE_FMA 0
+#endif
+
+#ifdef ZMIJ_OPTIMIZE_SIZE
+// Use the provided definition.
+#elif defined(__OPTIMIZE_SIZE__)
+#  define ZMIJ_OPTIMIZE_SIZE 1
+#else
+#  define ZMIJ_OPTIMIZE_SIZE 0
+#endif
+
+#if ZMIJ_HAS_ATTRIBUTE(always_inline) && !ZMIJ_OPTIMIZE_SIZE
+#  define ZMIJ_INLINE __attribute__((always_inline)) inline
+#elif ZMIJ_MSC_VER
+#  define ZMIJ_INLINE __forceinline
+#else
+#  define ZMIJ_INLINE inline
+#endif
+
 namespace zmij {
 
 enum {
@@ -78,6 +201,18 @@ enum {
   double_buffer_size = 34,
   // Worst case is IEEE binary128: 1 sign + 36 digits + '.' + "e-dddd".
   long_double_buffer_size = 44,
+};
+
+// Minimum buffer sizes for the integer write functions. These exceed the
+// maximum digit counts because the implementation may store in wider blocks
+// past the last digit.
+enum {
+  uint32_buffer_size = 16,
+  int32_buffer_size = 17,
+  uint64_buffer_size = 20,
+  int64_buffer_size = 21,
+  uint128_buffer_size = 48,
+  int128_buffer_size = 49,
 };
 
 namespace detail {
@@ -629,6 +764,23 @@ inline ZMIJ_CONSTEXPR20 auto copy_clamped(char* out, size_t n,
 
 }  // namespace detail
 
+// Integer formatting internals, implemented in zmij-int.cc. A separate
+// namespace so the integer implementation stays self-contained and its
+// helpers cannot collide with detail's in unity builds.
+namespace details_int {
+
+// Writes the decimal representation of an unsigned integer to out and returns
+// one past the last character. May write up to the type's buffer size (see
+// the *_buffer_size enum above) regardless of the number of digits.
+template <typename UInt>
+auto itoa(char* out, UInt value) noexcept -> char*;
+
+// Same for a signed integer, with a leading '-' for negative values.
+template <typename Int>
+auto itoa_signed(char* out, Int value) noexcept -> char*;
+
+}  // namespace details_int
+
 /// Converts `value` into the shortest correctly rounded decimal representation.
 /// Usage:
 ///   auto [sig, exp, negative] = to_decimal(6.62607015e-34);
@@ -709,6 +861,68 @@ inline auto write(char* out, size_t n, long double value) noexcept -> char* {
   if (LDBL_MANT_DIG == DBL_MANT_DIG) return write(out, n, double(value));
   return detail::clamp_end(out, detail::write_big(out, n, value), n);
 }
+
+/// Writes the decimal representation of `value` to `out` without a null
+/// terminator. Returns a pointer past the last character written; if the
+/// representation exceeds `n` characters, only the first `n` are written.
+inline auto write(char* out, size_t n, unsigned value) noexcept -> char* {
+  char buffer[uint32_buffer_size];
+  if (n >= sizeof(buffer)) return details_int::itoa(out, uint32_t(value));
+  return detail::copy_clamped(out, n, buffer,
+                              details_int::itoa(buffer, uint32_t(value)));
+}
+
+inline auto write(char* out, size_t n, int value) noexcept -> char* {
+  char buffer[int32_buffer_size];
+  if (n >= sizeof(buffer))
+    return details_int::itoa_signed(out, int32_t(value));
+  return detail::copy_clamped(
+      out, n, buffer, details_int::itoa_signed(buffer, int32_t(value)));
+}
+
+inline auto write(char* out, size_t n, unsigned long long value) noexcept
+    -> char* {
+  char buffer[uint64_buffer_size];
+  if (n >= sizeof(buffer)) return details_int::itoa(out, uint64_t(value));
+  return detail::copy_clamped(out, n, buffer,
+                              details_int::itoa(buffer, uint64_t(value)));
+}
+
+inline auto write(char* out, size_t n, long long value) noexcept -> char* {
+  char buffer[int64_buffer_size];
+  if (n >= sizeof(buffer))
+    return details_int::itoa_signed(out, int64_t(value));
+  return detail::copy_clamped(
+      out, n, buffer, details_int::itoa_signed(buffer, int64_t(value)));
+}
+
+inline auto write(char* out, size_t n, unsigned long value) noexcept -> char* {
+  if (sizeof(unsigned long) <= sizeof(uint32_t))
+    return write(out, n, static_cast<unsigned>(value));
+  return write(out, n, static_cast<unsigned long long>(value));
+}
+
+inline auto write(char* out, size_t n, long value) noexcept -> char* {
+  if (sizeof(long) <= sizeof(int32_t)) return write(out, n, int(value));
+  return write(out, n, static_cast<long long>(value));
+}
+
+#if ZMIJ_USE_INT128
+inline auto write(char* out, size_t n, unsigned __int128 value) noexcept
+    -> char* {
+  char buffer[uint128_buffer_size];
+  if (n >= sizeof(buffer)) return details_int::itoa(out, value);
+  return detail::copy_clamped(out, n, buffer,
+                              details_int::itoa(buffer, value));
+}
+
+inline auto write(char* out, size_t n, __int128 value) noexcept -> char* {
+  char buffer[int128_buffer_size];
+  if (n >= sizeof(buffer)) return details_int::itoa_signed(out, value);
+  return detail::copy_clamped(out, n, buffer,
+                              details_int::itoa_signed(buffer, value));
+}
+#endif  // ZMIJ_USE_INT128
 
 /// Writes `value` in scientific format with `precision` digits after the
 /// decimal point (e.g. 1.234e+05) to `out`, without a null terminator, like
